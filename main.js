@@ -13,11 +13,11 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = 1.38;
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x2c2440, 30, 170);
+scene.fog = new THREE.Fog(0x2c2440, 30, 260);
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
 const DEFAULT_CAM = new THREE.Vector3(0, 7.2, 17.5);
@@ -130,9 +130,9 @@ sun.shadow.camera.far = 100;
 sun.shadow.bias = -0.0006;
 scene.add(sun);
 
-scene.add(new THREE.HemisphereLight(0x5a68b8, 0x3a2c22, 0.6));
+scene.add(new THREE.HemisphereLight(0x5a68b8, 0x3a2c22, 0.72));
 
-const moonFill = new THREE.DirectionalLight(0x8fa8ff, 0.35);
+const moonFill = new THREE.DirectionalLight(0x8fa8ff, 0.5);
 moonFill.position.set(-25, 30, 25);
 scene.add(moonFill);
 
@@ -247,12 +247,12 @@ for (let i = 0; i < 22; i++) {
 
 // planine u daljini
 const mountainMat = new THREE.MeshStandardMaterial({ color: 0x2c3350, roughness: 1, flatShading: true });
-for (let i = 0; i < 9; i++) {
-  const a = (i / 9) * Math.PI * 2 + rand() * 0.4;
-  const r = 170 + rand() * 60;
-  const h = 45 + rand() * 55;
-  const m = new THREE.Mesh(new THREE.ConeGeometry(h * (0.7 + rand() * 0.5), h, 6), mountainMat);
-  m.position.set(Math.cos(a) * r, h * 0.42, Math.sin(a) * r);
+for (let i = 0; i < 12; i++) {
+  const a = (i / 12) * Math.PI * 2 + rand() * 0.4;
+  const r = 205 + rand() * 55;
+  const h = 26 + rand() * 30;
+  const m = new THREE.Mesh(new THREE.ConeGeometry(h * (1.6 + rand() * 1.0), h, 7), mountainMat);
+  m.position.set(Math.cos(a) * r, h * 0.44, Math.sin(a) * r);
   m.rotation.y = rand() * 3;
   scene.add(m);
 }
@@ -301,10 +301,10 @@ function makeFlame(size, color, intensity, x, y, z) {
   vatra.add(makeFlame(0.5, 0xffe08a, 3.0, -0.1, 0.55, -0.08));
   scene.add(vatra);
 
-  const fireLight = new THREE.PointLight(0xff8033, 26, 22, 2);
+  const fireLight = new THREE.PointLight(0xff8033, 34, 24, 2);
   fireLight.position.set(0, 1.3, 0);
   scene.add(fireLight);
-  flickerLights.push({ light: fireLight, base: 26, amp: 6, speed: 11, phase: 0 });
+  flickerLights.push({ light: fireLight, base: 34, amp: 7, speed: 11, phase: 0 });
 }
 
 // žar koji leti sa vatre
@@ -337,7 +337,8 @@ let embers, emberData;
 {
   const NUM = 10;
   for (let i = 0; i < NUM; i++) {
-    const a = ((i + 0.5) / NUM) * Math.PI * 2;
+    // baklje stoje IZMEĐU postamenata (postament i je na uglu i/NUM - PI/2)
+    const a = ((i + 0.5) / NUM) * Math.PI * 2 - Math.PI / 2;
     const x = Math.cos(a) * 10.6, z = Math.sin(a) * 10.6;
     const t = new THREE.Group();
 
@@ -430,7 +431,7 @@ function makeNameplate(name, title) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-  sprite.scale.set(2.6, 0.68, 1);
+  sprite.scale.set(2.05, 0.54, 1);
   return sprite;
 }
 
@@ -460,7 +461,7 @@ HERO_CREATORS.forEach((create, i) => {
   plate.position.y = bbox.max.y + 0.55;
   root.add(plate);
 
-  heroes.push({ root, data, plate, baseScale: plate.scale.clone() });
+  heroes.push({ root, data, plate, baseScale: plate.scale.clone(), height: bbox.max.y });
   heroRoots.push(root);
 });
 
@@ -489,20 +490,28 @@ function findHeroIndex(obj) {
   return -1;
 }
 
+// blagi reflektor koji osvetli heroja dok ga razgledamo izbliza
+const portraitLight = new THREE.PointLight(0xffd9a8, 0, 9, 2);
+scene.add(portraitLight);
+
 // glatko fokusiranje kamere na izabranog heroja
 let tween = null; // { t0, dur, camFrom, camTo, tgtFrom, tgtTo }
 function focusHero(i) {
-  const { root } = heroes[i];
+  const { root, height } = heroes[i];
   const p = root.position;
   const dir = new THREE.Vector3(-p.x, 0, -p.z).normalize();
-  const camTo = p.clone().addScaledVector(dir, 4.4).add(new THREE.Vector3(0, 2.0, 0));
-  const tgtTo = p.clone().add(new THREE.Vector3(0, 1.35, 0));
+  const eyeY = height * 0.62;                       // kadar prilagodjen visini heroja
+  const dist = 3.1 + height * 0.55;
+  const camTo = p.clone().addScaledVector(dir, dist).add(new THREE.Vector3(0, eyeY + 0.62, 0));
+  const tgtTo = p.clone().add(new THREE.Vector3(0, eyeY, 0));
   tween = {
     t0: performance.now(), dur: 1100,
     camFrom: camera.position.clone(), camTo,
     tgtFrom: controls.target.clone(), tgtTo,
   };
   controls.autoRotate = false;
+  portraitLight.position.copy(p).addScaledVector(dir, 3.0).add(new THREE.Vector3(0, eyeY + 0.9, 0));
+  portraitLight.intensity = 13;
 }
 
 function resetView() {
@@ -514,6 +523,7 @@ function resetView() {
     tgtFrom: controls.target.clone(), tgtTo: DEFAULT_TARGET.clone(),
   };
   controls.autoRotate = true;
+  portraitLight.intensity = 0;
 }
 
 let downAt = null;
