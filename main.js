@@ -611,6 +611,14 @@ function animate() {
   }
 }
 
+// mali javni hook — koristi se za automatske screenshot-ove i debug iz konzole
+window.__krug = {
+  focusHero,
+  resetView,
+  count: heroes.length,
+  names: heroes.map((h) => h.data.name),
+};
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
