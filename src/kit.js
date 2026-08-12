@@ -376,46 +376,76 @@ export function makeFace(o = {}) {
 
   const g = new THREE.Group();
 
+  const WIDE = o.wide ?? 1.0, TALL = o.tall ?? 1.05, DEEP = o.deep ?? 0.95;
   const skull = sphere(r, skin, 0, 0, 0, 14, 12);
-  skull.scale.set(o.wide ?? 1.0, o.tall ?? 1.05, o.deep ?? 0.95);
+  skull.scale.set(WIDE, TALL, DEEP);
   g.add(skull);
 
-  // jagodice daju licu karakter i hvataju svetlo sa strane
+  // Površina lobanje za dato (x, y). Crte lica se postavljaju UZ nju, ne pred
+  // njom: kutija koja lebdi ispred lica na blizinu se vidi kao daščica.
+  const surfZ = (x, y) => {
+    const k = 1 - (x / (r * WIDE)) ** 2 - (y / (r * TALL)) ** 2;
+    return k <= 0.02 ? 0 : r * DEEP * Math.sqrt(k);
+  };
+
+  // jagodice — samo oblikuju siluetu, zato utonule i spljoštene
   if (o.cheeks !== false) {
     for (const s of [-1, 1]) {
-      const c = sphere(r * 0.30, skin, s * r * 0.52, eyeY - r * 0.26, r * 0.56, 8, 7);
-      c.scale.set(1, 0.72, 0.66);
+      const cy = eyeY - r * 0.26;
+      const c = sphere(r * 0.30, skin, s * r * 0.50, cy, surfZ(r * 0.50, cy) - r * 0.20, 8, 7);
+      c.scale.set(1, 0.72, 0.5);
       g.add(c);
     }
   }
 
-  // oči: beonjača + zenica + kapak koji pada pri treptaju
+  // nadočni greben — jedan komad preko oba oka, daje licu strukturu
+  const ridge = sphere(r * 0.52, skin, 0, browY - r * 0.04, surfZ(0, browY) - r * 0.30, 10, 8);
+  ridge.scale.set(1.45, 0.34, 0.42);
+  g.add(ridge);
+
+  // oči: beonjača utonula u duplju, zenica na njenom polu, kapak kao tanka
+  // kapica koja prati oblik oka i pada pri treptaju
   const eyes = [];
   const irises = [];
   const lids = [];
   for (const s of [-1, 1]) {
-    const w = sphere(eyeSize, eyeWhiteMat, s * eyeSpread, eyeY, eyeZ, 9, 8);
-    w.scale.set(1, 0.86, 0.6);
+    const ex = s * eyeSpread;
+    const ez = Math.min(eyeZ, surfZ(eyeSpread, eyeY) - eyeSize * 0.34);
+
+    const w = sphere(eyeSize, eyeWhiteMat, ex, eyeY, ez, 9, 8);
+    w.scale.set(1, 0.84, 0.72);
     g.add(w); eyes.push(w);
 
-    const iris = sphere(eyeSize * 0.48, irisMat, s * eyeSpread, eyeY, eyeZ + eyeSize * 0.5, 8, 7);
+    const iris = sphere(eyeSize * 0.46, irisMat, ex, eyeY, ez + eyeSize * 0.60, 8, 7);
+    iris.scale.set(1, 1, 0.7);
     g.add(iris); irises.push(iris);
 
-    const lid = bx(eyeSize * 2.3, eyeSize * 1.5, eyeSize * 0.8, skin,
-      s * eyeSpread, eyeY + eyeSize * 1.5, eyeZ + eyeSize * 0.18);
+    const lid = sphere(eyeSize * 1.16, skin, ex, eyeY + eyeSize * 0.92, ez - eyeSize * 0.08, 9, 7);
+    lid.scale.set(1, 0.52, 0.86);
     g.add(lid); lids.push(lid);
+
+    // donji kapak — zatvara duplju odozdo da beonjača ne „ispada"
+    const under = sphere(eyeSize * 1.1, skin, ex, eyeY - eyeSize * 0.94, ez - eyeSize * 0.16, 8, 6);
+    under.scale.set(1, 0.44, 0.8);
+    g.add(under);
   }
 
-  // obrve — ugao nosi izraz lica
+  // obrve — tanke, priljubljene uz greben; ugao nosi izraz lica
   const brows = [];
   for (const s of [-1, 1]) {
-    const b = bx(r * 0.46, r * 0.10, r * 0.14, browMat, s * eyeSpread * 1.06, browY, eyeZ * 0.92);
+    const bxp = s * eyeSpread * 1.02;
+    const b = bx(r * 0.44, r * 0.062, r * 0.055, browMat, bxp, browY, surfZ(eyeSpread * 1.02, browY) - r * 0.012);
     b.rotation.z = -browAngle * s;
     g.add(b); brows.push(b);
   }
 
-  // nos
-  const nose = sphere(r * 0.20, skin, 0, noseY, eyeZ * 0.98, 8, 7);
+  // nos — koren spojen sa grebenom, pa vrh; nos koji počinje u vazduhu
+  // izgleda kao nalepljena grudva
+  g.add((() => {
+    const bridge = bx(r * 0.16, r * 0.34, r * 0.16, skin, 0, (browY + noseY) / 2, surfZ(0, (browY + noseY) / 2) - r * 0.05);
+    return bridge;
+  })());
+  const nose = sphere(r * 0.20, skin, 0, noseY, surfZ(0, noseY) - r * 0.04, 8, 7);
   nose.scale.set(o.noseWide ?? 0.85, 1.25, 1.0 + noseLen * 3);
   g.add(nose);
 

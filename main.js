@@ -37,7 +37,7 @@ controls.target.copy(HOME_TGT);
 controls.enableDamping = true;
 controls.dampingFactor = 0.065;
 controls.maxPolarAngle = Math.PI * 0.495;
-controls.minDistance = 2.2;
+controls.minDistance = 0.6;   // dovoljno nisko da bliski kadar ne bude odbijen
 controls.maxDistance = 46;
 
 // ---------------------------------------------------------------- dvorana ---
@@ -79,7 +79,7 @@ naveFill.position.set(0, 5.2, 2);
 scene.add(naveFill);
 
 // reflektor koji prati izabranog junaka
-const spot = new THREE.PointLight(0xffe0bc, 0, 8, 2);
+const spot = new THREE.PointLight(0xffe0bc, 0, 11, 2);
 scene.add(spot);
 
 // ------------------------------------------------------------------- sneg ---
@@ -198,7 +198,11 @@ function makeSigil(kind, mat) {
 
 // ---------------------------------------------------------------- pločica ---
 
-/** Uklesana pločica sa imenom na prednjoj strani postamenta. */
+/**
+ * Uklesana pločica sa imenom, na nakrivljenoj kamenoj tabli pri prednjoj ivici
+ * postamenta — kao legenda pored eksponata. Vertikalna pločica na tako niskom
+ * postamentu ne bi bila čitljiva iz kadra koji gleda blago nadole.
+ */
 function makePlaque(name, title) {
   const cv = document.createElement('canvas');
   cv.width = 640; cv.height = 168;
@@ -232,11 +236,16 @@ function makePlaque(name, title) {
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const g = new THREE.Group();
+  g.add(cyl(0.40, 0.44, 0.05, plinthB, 0, 0.025, 0, 4));           // kameni klin
   const m = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.26, 0.33),
+    new THREE.PlaneGeometry(0.7, 0.184),
     new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 })
   );
-  return m;
+  m.rotation.x = -1.02;                                             // nakrivljena ka kameri
+  m.position.set(0, 0.075, 0.012);
+  g.add(m);
+  return g;
 }
 
 // ------------------------------------------------------------------ junaci ---
@@ -274,7 +283,7 @@ HEROES.forEach((create, i) => {
   plinth.add(ring);
 
   const plaque = makePlaque(data.name, data.title);
-  plaque.position.set(0, 0.2, 1.03);
+  plaque.position.set(0, PLINTH_H, 0.6);
   plinth.add(plaque);
   scene.add(plinth);
 
@@ -360,15 +369,17 @@ function select(i) {
 
   const eye = h.data.eyeY ?? 1.5;
   const camTo = new THREE.Vector3(
-    p.x + _f.x * 3.05 + _r.x * 1.35,
-    PLINTH_H + eye + 0.42,
-    p.z + _f.z * 3.05 + _r.z * 1.35
+    p.x + _f.x * 2.25 + _r.x * 0.9,
+    PLINTH_H + eye + 0.16,
+    p.z + _f.z * 2.25 + _r.z * 0.9
   );
-  const tgtTo = new THREE.Vector3(p.x, PLINTH_H + eye * 0.92, p.z);
+  // meta niže od očiju: kadar tako uhvati i postament sa pločicom
+  const tgtTo = new THREE.Vector3(p.x, PLINTH_H + eye * 0.70, p.z);
   glide(camTo, tgtTo);
 
-  spot.position.set(p.x + _f.x * 2.3 + _r.x * 0.9, PLINTH_H + eye + 1.25, p.z + _f.z * 2.3 + _r.z * 0.9);
-  spot.intensity = 15;
+  // reflektor sa strane kamere, dovoljno blizu da izvuče detalje iz mraka
+  spot.position.set(p.x + _f.x * 1.9 + _r.x * 1.15, PLINTH_H + eye + 0.95, p.z + _f.z * 1.9 + _r.z * 1.15);
+  spot.intensity = 24;
 
   elIme.textContent = h.data.name;
   elTitula.textContent = h.data.title;
@@ -508,6 +519,28 @@ window.__dvorana = {
   select, reset,
   names: heroes.map((h) => h.data.name),
   parts: heroes.map((h) => h.parts),
+  /** Bliski kadar gornjeg dela tela — za proveru lica i opreme. */
+  closeup(i) {
+    const h = heroes[i];
+    const p = h.root.position;
+    _f.set(Math.sin(h.facing), 0, Math.cos(h.facing));
+    _r.set(_f.z, 0, -_f.x);
+    const eye = h.data.eyeY ?? 1.5;
+    camera.position.set(
+      p.x + _f.x * 1.05 + _r.x * 0.42,
+      PLINTH_H + eye + 0.07,
+      p.z + _f.z * 1.05 + _r.z * 0.42
+    );
+    controls.target.set(p.x, PLINTH_H + eye - 0.08, p.z);
+    tween = null;
+    spot.position.set(p.x + _f.x * 1.5 + _r.x * 0.9, PLINTH_H + eye + 0.7, p.z + _f.z * 1.5 + _r.z * 0.9);
+    spot.intensity = 20;
+  },
+  renderInfo: () => ({
+    calls: renderer.info.render.calls,
+    triangles: renderer.info.render.triangles,
+    geometries: renderer.info.memory.geometries,
+  }),
   hideUI() { for (const id of ['zaglavlje', 'uputstvo', 'rail']) document.getElementById(id).style.display = 'none'; },
 };
 

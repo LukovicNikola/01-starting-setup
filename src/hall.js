@@ -248,10 +248,24 @@ export function createHall() {
       const a = (i / 5) * Math.PI * 2;
       b.add(rock(0.07, M(0x241c18, { roughness: 1 }), Math.sin(a) * 0.14, 1.2, Math.cos(a) * 0.14));
     }
-    for (const [size, col, inten, dy] of [
-      [0.62, 0xff6a22, 2.1, 1.5], [0.42, 0xffa63c, 2.5, 1.42], [0.26, 0xffd77e, 3.0, 1.36],
+    // Plamen: aditivni prozirni konusi, ne puni. Neproziran konus sa jakim
+    // emissive-om tonemapping izbeli u papirnatu piramidu — ovako ostaje vatra.
+    // Ne bacaju senku, pa se grade sirovim meshom (cone() bi upalio castShadow).
+    for (const [size, col, op, dy] of [
+      [0.56, 0xff4a12, 0.30, 1.40],
+      [0.40, 0xff8526, 0.36, 1.34],
+      [0.25, 0xffc063, 0.46, 1.29],
+      [0.13, 0xfff0c0, 0.55, 1.25],
     ]) {
-      const f = cone(size * 0.42, size, Glow(col, inten, { transparent: true, opacity: 0.92 }), 0, dy, 0, 7);
+      const f = new THREE.Mesh(
+        new THREE.ConeGeometry(size * 0.40, size, 6),
+        new THREE.MeshBasicMaterial({
+          color: col, transparent: true, opacity: op,
+          blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+        })
+      );
+      f.position.set(0, dy, 0);
+      f.rotation.y = ((x * 5 + z * 3) % 6) * 0.5;
       flames.push({ mesh: f, speed: 8 + (x * 3 + z) % 5, phase: (x * 7 + z * 3) % 6 });
       b.add(f);
     }
