@@ -1,106 +1,194 @@
 <!DOCTYPE html>
 <html lang="sr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Krug Heroja — deset junaka srednjovekovne fantazije</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>" />
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #14101f; }
-    #app { position: fixed; inset: 0; }
-    canvas { display: block; }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Dvorana Barjaka</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>" />
+<style>
+  :root {
+    --kamen: #0b0d16;
+    --ploca: rgba(20, 24, 38, 0.93);
+    --rub: rgba(216, 168, 74, 0.34);
+    --zlato: #e8c477;
+    --mesec: #b9c8ee;
+    --tekst: #e4e6ee;
+    --mut: #8f98b4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--kamen); }
+  #app { position: fixed; inset: 0; }
+  canvas { display: block; }
 
-    .ui { position: fixed; z-index: 10; color: #e8e2d0; font-family: Georgia, 'Times New Roman', serif; }
+  .ui {
+    position: fixed; z-index: 10; color: var(--tekst);
+    font-family: Georgia, 'Times New Roman', serif;
+  }
 
-    #naslov {
-      top: 22px; left: 26px; pointer-events: none;
-      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
-    }
-    #naslov h1 {
-      font-size: 30px; letter-spacing: 3px; color: #f2d98a; font-weight: 600;
-    }
-    #naslov p { font-size: 14px; opacity: 0.85; margin-top: 4px; letter-spacing: 1px; }
+  /* ---------------------------------------------------------- zaglavlje -- */
+  #zaglavlje { top: 22px; left: 26px; pointer-events: none; }
+  #zaglavlje h1 {
+    font-size: clamp(20px, 4.4vw, 30px);
+    letter-spacing: 0.2em; font-weight: 600; color: var(--zlato);
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9);
+  }
+  #zaglavlje p {
+    font-size: 12px; letter-spacing: 0.26em; text-transform: uppercase;
+    color: var(--mut); margin-top: 7px;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+  }
 
-    #uputstvo {
-      bottom: 18px; left: 26px; font-size: 13px; opacity: 0.75; pointer-events: none;
-      text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9); letter-spacing: 0.5px;
-    }
+  #uputstvo {
+    top: 22px; right: 26px; text-align: right; pointer-events: none;
+    font-size: 12px; letter-spacing: 0.06em; color: var(--mut); line-height: 1.85;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+  }
+  #uputstvo b { color: var(--mesec); font-weight: normal; }
 
+  /* -------------------------------------------------------------- panel -- */
+  #panel {
+    right: 26px; top: 50%; transform: translateY(-50%) translateX(18px);
+    width: 330px; padding: 22px 24px 24px;
+    background: var(--ploca);
+    border: 1px solid var(--rub);
+    border-radius: 3px;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.75);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+  #panel.open { opacity: 1; transform: translateY(-50%) translateX(0); pointer-events: auto; }
+  #panel h2 { color: var(--zlato); font-size: 24px; letter-spacing: 0.03em; text-wrap: balance; }
+  #panel .titula {
+    color: var(--mesec); font-style: italic; font-size: 15px; margin-top: 3px;
+  }
+  #panel .crta {
+    height: 1px; margin: 14px 0;
+    background: linear-gradient(90deg, var(--rub), transparent);
+  }
+  #panel .opis { font-size: 14.5px; line-height: 1.62; color: var(--tekst); opacity: 0.92; }
+  #panel .delovi {
+    margin-top: 14px; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--mut); font-variant-numeric: tabular-nums;
+  }
+  #zatvori {
+    position: absolute; top: 10px; right: 12px;
+    background: none; border: none; cursor: pointer;
+    color: var(--mut); font-size: 20px; font-family: Georgia, serif; line-height: 1;
+  }
+  #zatvori:hover, #zatvori:focus-visible { color: var(--zlato); outline: none; }
+
+  /* --------------------------------------------------------------- rail -- */
+  #rail {
+    bottom: 22px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 7px; max-width: calc(100vw - 40px);
+    overflow-x: auto; padding: 4px 2px 8px;
+    scrollbar-width: thin; scrollbar-color: var(--rub) transparent;
+  }
+  .chip {
+    flex: 0 0 auto; cursor: pointer;
+    background: rgba(16, 19, 31, 0.86);
+    border: 1px solid rgba(150, 165, 200, 0.2);
+    border-radius: 2px;
+    color: var(--mut);
+    font-family: Georgia, serif; font-size: 12.5px;
+    padding: 7px 12px 7px 9px;
+    display: flex; align-items: baseline; gap: 7px;
+    white-space: nowrap;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+  }
+  .chip-br {
+    font-size: 10px; letter-spacing: 0.1em; color: rgba(216, 168, 74, 0.6);
+    font-variant-numeric: tabular-nums;
+  }
+  .chip:hover, .chip:focus-visible {
+    color: var(--tekst); border-color: var(--rub); outline: none;
+  }
+  .chip.on {
+    color: var(--zlato); border-color: var(--zlato);
+    background: rgba(216, 168, 74, 0.12);
+  }
+  .chip.on .chip-br { color: var(--zlato); }
+
+  /* -------------------------------------------------------------- ostalo -- */
+  #ucitavanje {
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 15px; letter-spacing: 0.28em; text-transform: uppercase;
+    color: var(--mut); pointer-events: none;
+  }
+  #greska {
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    max-width: 560px; display: none;
+    background: rgba(64, 18, 24, 0.96); border: 1px solid rgba(255, 140, 140, 0.35);
+    border-radius: 3px; padding: 22px 26px; font-size: 14px; line-height: 1.7;
+  }
+  #greska code {
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px;
+    background: rgba(0, 0, 0, 0.4); padding: 2px 7px; border-radius: 3px;
+  }
+
+  @media (max-width: 860px) {
+    #uputstvo { display: none; }
     #panel {
-      bottom: 26px; left: 50%; transform: translateX(-50%);
-      width: min(560px, calc(100vw - 40px));
-      background: linear-gradient(160deg, rgba(24, 20, 40, 0.92), rgba(12, 10, 22, 0.94));
-      border: 1px solid rgba(242, 217, 138, 0.45);
-      border-radius: 10px; padding: 16px 44px 16px 20px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
-      display: none;
+      right: 14px; left: 14px; width: auto;
+      top: auto; bottom: 84px; transform: translateY(14px);
     }
-    #panel.vidljiv { display: block; }
-    #panel h2 { color: #f2d98a; font-size: 22px; letter-spacing: 1px; }
-    #panel h3 { color: #9fb4e8; font-size: 14px; font-weight: normal; font-style: italic; margin: 2px 0 10px; }
-    #panel p { font-size: 14px; line-height: 1.55; opacity: 0.92; }
-    #zatvori {
-      position: absolute; top: 8px; right: 12px; cursor: pointer;
-      background: none; border: none; color: #e8e2d0; font-size: 22px; opacity: 0.7;
-      font-family: Georgia, serif;
-    }
-    #zatvori:hover { opacity: 1; }
+    #panel.open { transform: translateY(0); }
+    #zaglavlje { top: 16px; left: 16px; }
+    #rail { bottom: 14px; }
+  }
 
-    #ucitavanje {
-      top: 50%; left: 50%; transform: translate(-50%, -50%);
-      font-size: 18px; letter-spacing: 2px; opacity: 0.8; pointer-events: none;
-    }
-
-    #greska {
-      top: 50%; left: 50%; transform: translate(-50%, -50%);
-      max-width: 640px; background: rgba(90, 20, 20, 0.95); border-radius: 8px;
-      padding: 20px 26px; font-size: 14px; line-height: 1.6; display: none;
-    }
-    #greska code { font-family: monospace; background: rgba(0,0,0,0.35); padding: 1px 6px; border-radius: 4px; }
-  </style>
+  @media (prefers-reduced-motion: reduce) {
+    #panel { transition: none; }
+  }
+</style>
 </head>
 <body>
-  <div id="app"></div>
+<div id="app"></div>
 
-  <div class="ui" id="naslov">
-    <h1>⚔ KRUG HEROJA</h1>
-    <p>deset junaka srednjovekovne fantazije</p>
-  </div>
+<header class="ui" id="zaglavlje">
+  <h1>DVORANA BARJAKA</h1>
+  <p>deset junaka · noć uoči pohoda</p>
+</header>
 
-  <div class="ui" id="uputstvo">
-    🖱 prevuci — rotacija &nbsp;·&nbsp; točkić — zum &nbsp;·&nbsp; klik na heroja — detalji
-  </div>
+<div class="ui" id="uputstvo">
+  <b>prevuci</b> — obilazak<br />
+  <b>točkić</b> — prilaz<br />
+  <b>klik na junaka</b> — priča<br />
+  <b>← →</b> — sledeći junak
+</div>
 
-  <div class="ui" id="panel">
-    <button id="zatvori" title="Zatvori">✕</button>
-    <h2 id="panel-ime"></h2>
-    <h3 id="panel-titula"></h3>
-    <p id="panel-opis"></p>
-  </div>
+<aside class="ui" id="panel">
+  <button id="zatvori" title="Zatvori" aria-label="Zatvori">✕</button>
+  <h2 id="p-ime"></h2>
+  <p class="titula" id="p-titula"></p>
+  <div class="crta"></div>
+  <p class="opis" id="p-opis"></p>
+  <p class="delovi" id="p-delovi"></p>
+</aside>
 
-  <div class="ui" id="ucitavanje">Priprema junaka…</div>
+<nav class="ui" id="rail" aria-label="Spisak junaka"></nav>
 
-  <div class="ui" id="greska">
-    <strong>Scena nije mogla da se učita.</strong><br /><br />
-    Ako si otvorio/la fajl direktno (<code>file://</code>), pokreni lokalni server iz foldera projekta:<br /><br />
-    <code>python3 -m http.server 8080</code> &nbsp;ili&nbsp; <code>npm start</code><br /><br />
-    pa otvori <code>http://localhost:8080</code><br /><br />
-    <span id="greska-detalji" style="opacity:0.7; font-family:monospace; font-size:12px;"></span>
-  </div>
+<p class="ui" id="ucitavanje">dvorana se otvara…</p>
 
-  <script>
-    window.addEventListener('error', (e) => {
-      const g = document.getElementById('greska');
-      g.style.display = 'block';
-      document.getElementById('greska-detalji').textContent = e.message || '';
-      document.getElementById('ucitavanje').style.display = 'none';
-    });
-  </script>
+<div class="ui" id="greska">
+  <strong>Scena nije mogla da se učita.</strong><br /><br />
+  ES moduli ne rade preko <code>file://</code>. Pokreni server iz foldera projekta:<br /><br />
+  <code>python3 -m http.server 8080</code><br /><br />
+  pa otvori <code>http://localhost:8080</code><br /><br />
+  <span id="greska-detalji" style="opacity:.7;font-family:ui-monospace,monospace;font-size:12px"></span>
+</div>
 
-  <script type="importmap">
-    { "imports": { "three": "./vendor/three.module.js" } }
-  </script>
-  <script type="module" src="./main.js"></script>
+<script>
+  window.addEventListener('error', (e) => {
+    document.getElementById('greska').style.display = 'block';
+    document.getElementById('ucitavanje').style.display = 'none';
+    document.getElementById('greska-detalji').textContent = e.message || '';
+  });
+</script>
+
+<script type="importmap">
+  { "imports": { "three": "./vendor/three.module.js" } }
+</script>
+<script type="module" src="./main.js"></script>
 </body>
 </html>

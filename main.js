@@ -1,11 +1,18 @@
-// main.js — Krug Heroja: prosta scena u sumrak sa deset junaka na postamentima
+// main.js — Dvorana Barjaka
+//
+// Deset junaka stoji u dva reda niz razrušenu kamenu lađu. Iza svakog visi
+// njegov barjak, ispred njega je uklesana pločica sa imenom. Kroz probijen
+// krov pada sneg i mesečina; jedina toplina su žeravnici uz stubove.
+
 import * as THREE from 'three';
 import { OrbitControls } from './vendor/OrbitControls.js';
-import { HERO_CREATORS } from './heroes/index.js';
+import { createHall, HERO_Z, HERO_X, PLINTH_H, BANNER_X } from './src/hall.js';
+import { HEROES } from './src/heroes/index.js';
+import { C, M, Metal, Cloth, Glow, box, cyl, sphere, cone, torus, group, seeded, countMeshes } from './src/kit.js';
+
+const rand = seeded(51207);
 
 // ------------------------------------------------------------ osnova scene ---
-
-const app = document.getElementById('app');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -13,541 +20,404 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.38;
-app.appendChild(renderer.domElement);
+renderer.toneMappingExposure = 1.32;
+document.getElementById('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x2c2440, 30, 260);
+scene.background = new THREE.Color(0x0b0d16);
+scene.fog = new THREE.FogExp2(0x121628, 0.017);
 
-const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
-const DEFAULT_CAM = new THREE.Vector3(0, 7.2, 17.5);
-const DEFAULT_TARGET = new THREE.Vector3(0, 1.4, 0);
-camera.position.copy(DEFAULT_CAM);
+const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.1, 300);
+const HOME_CAM = new THREE.Vector3(0, 4.3, 20.5);
+const HOME_TGT = new THREE.Vector3(0, 2.4, 0.5);
+camera.position.copy(HOME_CAM);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.copy(DEFAULT_TARGET);
+controls.target.copy(HOME_TGT);
 controls.enableDamping = true;
-controls.dampingFactor = 0.06;
-controls.maxPolarAngle = Math.PI * 0.49;
-controls.minDistance = 3;
-controls.maxDistance = 70;
-controls.autoRotate = true;
-controls.autoRotateSpeed = 0.5;
+controls.dampingFactor = 0.065;
+controls.maxPolarAngle = Math.PI * 0.495;
+controls.minDistance = 2.2;
+controls.maxDistance = 46;
 
-// deterministički pseudo-slučajni brojevi (scena uvek izgleda isto)
-function mulberry32(seed) {
-  return function () {
-    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-const rand = mulberry32(20260811);
+// ---------------------------------------------------------------- dvorana ---
 
-// ------------------------------------------------------------------- nebo ---
+const hall = createHall();
+scene.add(hall.group);
+const flames = hall.flames.slice();
+const flickerLights = hall.lights.slice();
 
-const sky = new THREE.Mesh(
-  new THREE.SphereGeometry(300, 32, 16),
-  new THREE.ShaderMaterial({
-    side: THREE.BackSide,
-    depthWrite: false,
-    fog: false,
-    uniforms: {
-      cTop: { value: new THREE.Color(0x121a3c) },
-      cMid: { value: new THREE.Color(0x4a3768) },
-      cBot: { value: new THREE.Color(0xd96f3f) },
-    },
-    vertexShader: /* glsl */ `
-      varying vec3 vPos;
-      void main() {
-        vPos = position;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }`,
-    fragmentShader: /* glsl */ `
-      varying vec3 vPos;
-      uniform vec3 cTop, cMid, cBot;
-      void main() {
-        float h = normalize(vPos).y;
-        vec3 col = h > 0.12
-          ? mix(cMid, cTop, smoothstep(0.12, 0.65, h))
-          : mix(cBot, cMid, smoothstep(-0.08, 0.12, h));
-        gl_FragColor = vec4(col, 1.0);
-      }`,
-  })
-);
-scene.add(sky);
+// ------------------------------------------------------------- osvetljenje ---
 
-// zvezde
+// Mesečina ulazi kroz rozetu na začelju i seče lađu po dužini.
+const moon = new THREE.DirectionalLight(0xa8c4ff, 2.5);
+moon.position.set(-6, 21, -34);
+moon.target.position.set(0, 1, 2);
+scene.add(moon.target);
+moon.castShadow = true;
+moon.shadow.mapSize.set(2048, 2048);
+moon.shadow.camera.left = -12;
+moon.shadow.camera.right = 12;
+moon.shadow.camera.top = 16;
+moon.shadow.camera.bottom = -16;
+moon.shadow.camera.near = 8;
+moon.shadow.camera.far = 80;
+moon.shadow.bias = -0.0007;
+scene.add(moon);
+
+// hladno ispunjenje odozgo, mrko od kamenog poda
+scene.add(new THREE.HemisphereLight(0x5468a8, 0x2a2620, 0.72));
+
+// obodno svetlo iz pravca ulaza — odvaja junake od tamnog kamena iza njih
+const rim = new THREE.DirectionalLight(0x7f9fd8, 0.55);
+rim.position.set(9, 8, 26);
+scene.add(rim);
+
+// meka topla dopuna niz lađu, da junaci ne budu samo siluete
+const naveFill = new THREE.PointLight(0xffb877, 9, 30, 2);
+naveFill.position.set(0, 5.2, 2);
+scene.add(naveFill);
+
+// reflektor koji prati izabranog junaka
+const spot = new THREE.PointLight(0xffe0bc, 0, 8, 2);
+scene.add(spot);
+
+// ------------------------------------------------------------------- sneg ---
+
+let snow, snowData;
 {
-  const n = 800;
-  const pos = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
-    const phi = rand() * Math.PI * 2;
-    const y = 0.12 + rand() * 0.85;                    // samo gornja polulopta
-    const r = Math.sqrt(Math.max(0, 1 - y * y));
-    pos[i * 3] = Math.cos(phi) * r * 285;
-    pos[i * 3 + 1] = y * 285;
-    pos[i * 3 + 2] = Math.sin(phi) * r * 285;
+  const N = 520;
+  const pos = new Float32Array(N * 3);
+  snowData = new Array(N);
+  for (let i = 0; i < N; i++) {
+    snowData[i] = {
+      x: (rand() - 0.5) * 15.5,
+      z: -15 + rand() * 31,
+      speed: 0.35 + rand() * 0.5,
+      offset: rand(),
+      drift: 0.25 + rand() * 0.5,
+      phase: rand() * 6.283,
+    };
+    pos[i * 3 + 1] = -50;
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const stars = new THREE.Points(g, new THREE.PointsMaterial({
-    color: 0xcdd8ff, size: 1.6, sizeAttenuation: false,
-    transparent: true, opacity: 0.85, fog: false, depthWrite: false,
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  snow = new THREE.Points(geo, new THREE.PointsMaterial({
+    color: 0xdce8ff, size: 0.055, transparent: true, opacity: 0.8, depthWrite: false, fog: true,
   }));
-  scene.add(stars);
+  scene.add(snow);
 }
 
-// mesec
-{
-  const moon = new THREE.Mesh(
-    new THREE.SphereGeometry(9, 24, 18),
-    new THREE.MeshBasicMaterial({ color: 0xf5eedc, fog: false })
-  );
-  moon.position.set(-120, 150, -190);
-  scene.add(moon);
-  const halo = new THREE.Mesh(
-    new THREE.SphereGeometry(13, 24, 18),
-    new THREE.MeshBasicMaterial({ color: 0xf5eedc, transparent: true, opacity: 0.16, fog: false })
-  );
-  halo.position.copy(moon.position);
-  scene.add(halo);
-}
+// ------------------------------------------------------------------ grbovi ---
 
-// ---------------------------------------------------------------- osvetljenje ---
-
-const sun = new THREE.DirectionalLight(0xffb37a, 2.1);          // nisko sunce na zalasku
-sun.position.set(30, 16, -20);
-sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -24;
-sun.shadow.camera.right = 24;
-sun.shadow.camera.top = 24;
-sun.shadow.camera.bottom = -24;
-sun.shadow.camera.near = 5;
-sun.shadow.camera.far = 100;
-sun.shadow.bias = -0.0006;
-scene.add(sun);
-
-scene.add(new THREE.HemisphereLight(0x5a68b8, 0x3a2c22, 0.72));
-
-const moonFill = new THREE.DirectionalLight(0x8fa8ff, 0.5);
-moonFill.position.set(-25, 30, 25);
-scene.add(moonFill);
-
-// -------------------------------------------------------------------- tlo ---
-
-{
-  const geo = new THREE.PlaneGeometry(220, 220, 72, 72);
-  geo.rotateX(-Math.PI / 2);
-  const p = geo.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), z = p.getZ(i);
-    const d = Math.hypot(x, z);
-    if (d > 13.5) {
-      const talas = Math.sin(x * 0.16) * Math.cos(z * 0.13) * 0.5 + (rand() - 0.5) * 0.35;
-      p.setY(i, talas * Math.min(1, (d - 13.5) / 12));
-    }
-  }
-  geo.computeVertexNormals();
-  const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x3f5834, roughness: 1 }));
-  ground.receiveShadow = true;
-  scene.add(ground);
-}
-
-// kameni plato u sredini
-{
-  const plaza = new THREE.Mesh(
-    new THREE.CircleGeometry(11.5, 56).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: 0x6b6560, roughness: 0.95 })
-  );
-  plaza.position.y = 0.02;
-  plaza.receiveShadow = true;
-  scene.add(plaza);
-
-  const staza = new THREE.Mesh(
-    new THREE.RingGeometry(7.0, 9.0, 56).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: 0x59524b, roughness: 1 })
-  );
-  staza.position.y = 0.035;
-  staza.receiveShadow = true;
-  scene.add(staza);
-
-  // radijalne fuge između ploča
-  const fugMat = new THREE.MeshStandardMaterial({ color: 0x4a443e, roughness: 1 });
-  for (let i = 0; i < 28; i++) {
-    const a = (i / 28) * Math.PI * 2;
-    const fuga = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.015, 4.6), fugMat);
-    fuga.position.set(Math.cos(a) * 9.2, 0.04, Math.sin(a) * 9.2);
-    fuga.rotation.y = -a + Math.PI / 2;
-    fuga.receiveShadow = true;
-    scene.add(fuga);
-  }
-}
-
-// ------------------------------------------------------- okolina (dekor) ---
-
-const stoneMat = new THREE.MeshStandardMaterial({ color: 0x7d7a75, roughness: 1, flatShading: true });
-const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3018, roughness: 1, flatShading: true });
-const pineMat = new THREE.MeshStandardMaterial({ color: 0x28422a, roughness: 1, flatShading: true });
-const bushMat = new THREE.MeshStandardMaterial({ color: 0x3a5c33, roughness: 1, flatShading: true });
-
-function scatterAngle(rMin, rMax) {
-  const a = rand() * Math.PI * 2;
-  const r = rMin + rand() * (rMax - rMin);
-  return [Math.cos(a) * r, Math.sin(a) * r];
-}
-
-// stenje
-for (let i = 0; i < 34; i++) {
-  const [x, z] = scatterAngle(14, 70);
-  const s = 0.25 + rand() * 0.8;
-  const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), stoneMat);
-  rock.position.set(x, s * 0.4, z);
-  rock.rotation.set(rand() * 3, rand() * 3, rand() * 3);
-  rock.scale.y = 0.6 + rand() * 0.5;
-  rock.castShadow = rock.receiveShadow = true;
-  scene.add(rock);
-}
-
-// četinari
-for (let i = 0; i < 30; i++) {
-  const [x, z] = scatterAngle(17, 85);
-  const h = 3 + rand() * 4;
-  const tree = new THREE.Group();
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.045, h * 0.07, h * 0.35, 7), trunkMat);
-  trunk.position.y = h * 0.17;
-  trunk.castShadow = true;
-  tree.add(trunk);
-  for (let k = 0; k < 3; k++) {
-    const kr = h * (0.34 - k * 0.08);
-    const kh = h * (0.42 - k * 0.06);
-    const crown = new THREE.Mesh(new THREE.ConeGeometry(kr, kh, 8), pineMat);
-    crown.position.y = h * (0.38 + k * 0.24);
-    crown.castShadow = true;
-    tree.add(crown);
-  }
-  tree.position.set(x, 0, z);
-  tree.rotation.y = rand() * Math.PI * 2;
-  scene.add(tree);
-}
-
-// žbunje
-for (let i = 0; i < 22; i++) {
-  const [x, z] = scatterAngle(13, 50);
-  const s = 0.3 + rand() * 0.5;
-  const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), bushMat);
-  bush.position.set(x, s * 0.55, z);
-  bush.scale.y = 0.7;
-  bush.rotation.y = rand() * 3;
-  bush.castShadow = bush.receiveShadow = true;
-  scene.add(bush);
-}
-
-// planine u daljini
-const mountainMat = new THREE.MeshStandardMaterial({ color: 0x2c3350, roughness: 1, flatShading: true });
-for (let i = 0; i < 12; i++) {
-  const a = (i / 12) * Math.PI * 2 + rand() * 0.4;
-  const r = 205 + rand() * 55;
-  const h = 26 + rand() * 30;
-  const m = new THREE.Mesh(new THREE.ConeGeometry(h * (1.6 + rand() * 1.0), h, 7), mountainMat);
-  m.position.set(Math.cos(a) * r, h * 0.44, Math.sin(a) * r);
-  m.rotation.y = rand() * 3;
-  scene.add(m);
-}
-
-// ------------------------------------------------------------ logorska vatra ---
-
-const flames = [];       // { mesh, speed, phase, baseScale }
-const flickerLights = []; // { light, base, amp, speed, phase }
-
-function makeFlame(size, color, intensity, x, y, z) {
-  const f = new THREE.Mesh(
-    new THREE.ConeGeometry(size * 0.42, size, 7),
-    new THREE.MeshStandardMaterial({
-      color, emissive: color, emissiveIntensity: intensity,
-      roughness: 0.5, transparent: true, opacity: 0.92, flatShading: true,
-    })
-  );
-  f.position.set(x, y, z);
-  flames.push({ mesh: f, speed: 9 + rand() * 6, phase: rand() * 9, baseScale: 1 });
-  return f;
-}
-
-{
-  const vatra = new THREE.Group();
-  // kameni obruč
-  for (let i = 0; i < 9; i++) {
-    const a = (i / 9) * Math.PI * 2;
-    const st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22 + rand() * 0.1, 0), stoneMat);
-    st.position.set(Math.cos(a) * 0.95, 0.14, Math.sin(a) * 0.95);
-    st.rotation.set(rand() * 3, rand() * 3, rand() * 3);
-    st.castShadow = st.receiveShadow = true;
-    vatra.add(st);
-  }
-  // cepanice
-  for (let i = 0; i < 5; i++) {
-    const log = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 1.15, 7), trunkMat);
-    const a = (i / 5) * Math.PI * 2;
-    log.position.set(Math.cos(a) * 0.18, 0.22, Math.sin(a) * 0.18);
-    log.rotation.set(Math.PI / 2.6, 0, a);
-    log.castShadow = true;
-    vatra.add(log);
-  }
-  // plamenovi
-  vatra.add(makeFlame(1.15, 0xff6a22, 2.2, 0, 0.75, 0));
-  vatra.add(makeFlame(0.75, 0xffb23a, 2.6, 0.14, 0.62, 0.1));
-  vatra.add(makeFlame(0.5, 0xffe08a, 3.0, -0.1, 0.55, -0.08));
-  scene.add(vatra);
-
-  const fireLight = new THREE.PointLight(0xff8033, 34, 24, 2);
-  fireLight.position.set(0, 1.3, 0);
-  scene.add(fireLight);
-  flickerLights.push({ light: fireLight, base: 34, amp: 7, speed: 11, phase: 0 });
-}
-
-// žar koji leti sa vatre
-let embers, emberData;
-{
-  const n = 90;
-  const pos = new Float32Array(n * 3);
-  emberData = [];
-  for (let i = 0; i < n; i++) {
-    emberData.push({
-      a: rand() * Math.PI * 2,
-      r: 0.05 + rand() * 0.3,
-      speed: 0.5 + rand() * 0.9,
-      offset: rand() * 4,
-      swirl: 0.5 + rand() * 1.5,
-    });
-    pos[i * 3 + 1] = -10;
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  embers = new THREE.Points(g, new THREE.PointsMaterial({
-    color: 0xffa04d, size: 0.07, transparent: true, opacity: 0.9,
-    blending: THREE.AdditiveBlending, depthWrite: false,
-  }));
-  scene.add(embers);
-}
-
-// ----------------------------------------------------------------- baklje ---
-
-{
-  const NUM = 10;
-  for (let i = 0; i < NUM; i++) {
-    // baklje stoje IZMEĐU postamenata (postament i je na uglu i/NUM - PI/2)
-    const a = ((i + 0.5) / NUM) * Math.PI * 2 - Math.PI / 2;
-    const x = Math.cos(a) * 10.6, z = Math.sin(a) * 10.6;
-    const t = new THREE.Group();
-
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 2.3, 7), trunkMat);
-    pole.position.y = 1.15;
-    pole.castShadow = true;
-    t.add(pole);
-
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.08, 0.02, 6, 12),
-      new THREE.MeshStandardMaterial({ color: 0x4d5157, metalness: 0.7, roughness: 0.5 })
-    );
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 2.1;
-    t.add(ring);
-
-    const cup = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.11, 0.05, 0.16, 8),
-      new THREE.MeshStandardMaterial({ color: 0x4d5157, metalness: 0.7, roughness: 0.5 })
-    );
-    cup.position.y = 2.32;
-    t.add(cup);
-
-    t.add(makeFlame(0.42, 0xff7a2a, 2.4, 0, 2.6, 0));
-    t.add(makeFlame(0.26, 0xffd06a, 2.8, 0.03, 2.55, 0.02));
-
-    t.position.set(x, 0, z);
-    scene.add(t);
-
-    if (i % 2 === 0) { // svetlo na svakoj drugoj baklji (zbog performansi)
-      const l = new THREE.PointLight(0xff9040, 7, 9, 2);
-      l.position.set(x, 2.7, z);
-      scene.add(l);
-      flickerLights.push({ light: l, base: 7, amp: 2.2, speed: 9 + rand() * 4, phase: rand() * 7 });
-    }
-  }
-}
-
-// ---------------------------------------------------------------- postamenti ---
-
-const pedestalTopY = 0.62;
-function makePedestal(x, z, angle) {
+/** Prosti heraldički znaci od primitiva — svaki junak nosi svoj. */
+function makeSigil(kind, mat) {
   const g = new THREE.Group();
-  const m1 = new THREE.MeshStandardMaterial({ color: 0x5f5a55, roughness: 0.95, flatShading: true });
-  const m2 = new THREE.MeshStandardMaterial({ color: 0x6e6862, roughness: 0.9, flatShading: true });
+  const B = (w, h, d, x, y, z) => g.add(box(w, h, d, mat, x, y, z));
+  const S = (r, x, y, z) => g.add(sphere(r, mat, x, y, z, 8, 7));
+  const K = (r, h, x, y, z, rx = 0, rz = 0) => {
+    const c = cone(r, h, mat, x, y, z, 7); c.rotation.set(rx, 0, rz); g.add(c);
+  };
+  const R = (r, t, x, y, z) => { const o = torus(r, t, mat, x, y, z, 6, 18); g.add(o); };
 
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.32, 1.5, 0.24, 12), m1);
-  base.position.y = 0.12;
-  const mid = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.18, 0.32, 12), m2);
-  mid.position.y = 0.4;
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(1.08, 1.0, 0.12, 12), m1);
-  top.position.y = 0.56;
-  const trim = new THREE.Mesh(
-    new THREE.TorusGeometry(1.04, 0.025, 6, 24),
-    new THREE.MeshStandardMaterial({ color: 0xd9a13b, metalness: 0.8, roughness: 0.35 })
-  );
-  trim.rotation.x = Math.PI / 2;
-  trim.position.y = 0.615;
-
-  for (const p of [base, mid, top, trim]) { p.castShadow = p.receiveShadow = true; g.add(p); }
-  g.position.set(x, 0, z);
-  g.rotation.y = angle;
+  switch (kind) {
+    case 'fang':            // lovac na čudovišta — tri očnjaka
+      K(0.09, 0.42, -0.19, -0.02, 0, Math.PI, 0.16);
+      K(0.11, 0.54, 0, 0.02, 0, Math.PI, 0);
+      K(0.09, 0.42, 0.19, -0.02, 0, Math.PI, -0.16);
+      break;
+    case 'flask':           // alhemičar — bočica i kap
+      K(0.24, 0.42, 0, -0.05, 0, 0, 0);
+      B(0.12, 0.2, 0.05, 0, 0.24, 0);
+      B(0.2, 0.06, 0.06, 0, 0.36, 0);
+      S(0.07, 0, -0.14, 0.03);
+      break;
+    case 'feather':         // sokolar — pero
+      B(0.05, 0.62, 0.05, 0, 0, 0);
+      for (let i = 0; i < 5; i++) {
+        const y = 0.24 - i * 0.12, w = 0.1 + i * 0.045;
+        const l = box(w, 0.07, 0.04, mat, -w / 2 - 0.02, y, 0); l.rotation.z = 0.42; g.add(l);
+        const r2 = box(w, 0.07, 0.04, mat, w / 2 + 0.02, y, 0); r2.rotation.z = -0.42; g.add(r2);
+      }
+      break;
+    case 'spear':           // štitonoša — koplje preko štita
+      R(0.26, 0.05, 0, 0, -0.03);
+      B(0.05, 0.78, 0.05, 0, 0, 0.02);
+      K(0.09, 0.22, 0, 0.44, 0.02);
+      break;
+    case 'gear':            // opsadni majstor — zupčanik
+      R(0.2, 0.06, 0, 0, 0);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        B(0.09, 0.09, 0.05, Math.sin(a) * 0.26, Math.cos(a) * 0.26, 0);
+      }
+      S(0.07, 0, 0, 0);
+      break;
+    case 'lute':            // pevač — lutnja
+      S(0.2, 0, -0.14, 0);
+      g.children[g.children.length - 1].scale.set(1, 0.92, 0.4);
+      B(0.08, 0.56, 0.05, 0, 0.3, 0);
+      B(0.18, 0.09, 0.05, 0, 0.58, 0);
+      for (let i = 0; i < 3; i++) B(0.02, 0.5, 0.03, -0.04 + i * 0.04, 0.16, 0.05);
+      break;
+    case 'ring':            // monah — tri prstena
+      R(0.24, 0.045, 0, 0.08, 0);
+      R(0.16, 0.04, -0.14, -0.14, 0);
+      R(0.16, 0.04, 0.14, -0.14, 0);
+      break;
+    case 'lantern':         // inkvizitorka — fenjer
+      B(0.3, 0.34, 0.08, 0, 0, 0);
+      B(0.38, 0.06, 0.1, 0, 0.2, 0);
+      B(0.38, 0.06, 0.1, 0, -0.2, 0);
+      R(0.1, 0.03, 0, 0.32, 0);
+      S(0.1, 0, 0, 0.05);
+      break;
+    case 'snowflake':       // zimska veštica — pahulja
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const arm = box(0.05, 0.56, 0.05, mat, 0, 0, 0);
+        arm.rotation.z = a; g.add(arm);
+        B(0.16, 0.04, 0.04, Math.sin(a) * 0.2, Math.cos(a) * 0.2, 0);
+      }
+      S(0.09, 0, 0, 0.02);
+      break;
+    case 'rapier':          // dvobojac — ukršteni mačevi
+      for (const s of [-1, 1]) {
+        const bl = box(0.045, 0.72, 0.045, mat, 0, 0, 0);
+        bl.rotation.z = s * 0.62; g.add(bl);
+        const gd = box(0.22, 0.05, 0.05, mat, s * 0.12, -0.22, 0);
+        gd.rotation.z = s * 0.62; g.add(gd);
+      }
+      break;
+    default:
+      R(0.24, 0.06, 0, 0, 0);
+      S(0.1, 0, 0, 0);
+  }
   return g;
 }
 
-// ------------------------------------------------------------------ heroji ---
+// ---------------------------------------------------------------- pločica ---
 
-function makeNameplate(name, title) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 640; canvas.height = 168;
-  const c = canvas.getContext('2d');
+/** Uklesana pločica sa imenom na prednjoj strani postamenta. */
+function makePlaque(name, title) {
+  const cv = document.createElement('canvas');
+  cv.width = 640; cv.height = 168;
+  const c = cv.getContext('2d');
 
-  const r = 26;
-  c.fillStyle = 'rgba(10, 12, 24, 0.74)';
-  c.strokeStyle = 'rgba(242, 217, 138, 0.85)';
+  c.fillStyle = '#2b2e37';
+  c.fillRect(0, 0, cv.width, cv.height);
+  // blaga zrnastost kamena
+  for (let i = 0; i < 900; i++) {
+    c.fillStyle = `rgba(255,255,255,${0.012 + Math.random() * 0.03})`;
+    c.fillRect(Math.random() * cv.width, Math.random() * cv.height, 2, 2);
+  }
+  c.strokeStyle = 'rgba(216, 168, 74, 0.75)';
   c.lineWidth = 4;
-  c.beginPath();
-  c.roundRect(6, 6, canvas.width - 12, canvas.height - 12, r);
-  c.fill();
-  c.stroke();
+  c.strokeRect(12, 12, cv.width - 24, cv.height - 24);
 
   c.textAlign = 'center';
-  c.fillStyle = '#f2d98a';
-  c.font = 'bold 58px Georgia, serif';
-  c.fillText(name, canvas.width / 2, 74);
-  c.fillStyle = '#c8cfe8';
-  c.font = 'italic 34px Georgia, serif';
-  c.fillText(title, canvas.width / 2, 126);
+  // urezan trag ispod slova, pa zlatna slova preko — utisak klesanja
+  c.font = 'bold 54px Georgia, serif';
+  c.fillStyle = 'rgba(0,0,0,0.75)';
+  c.fillText(name.toUpperCase(), cv.width / 2 + 2, 80 + 3);
+  c.fillStyle = '#e8c477';
+  c.fillText(name.toUpperCase(), cv.width / 2, 80);
 
-  const tex = new THREE.CanvasTexture(canvas);
+  c.font = 'italic 30px Georgia, serif';
+  c.fillStyle = 'rgba(0,0,0,0.7)';
+  c.fillText(title, cv.width / 2 + 1, 126 + 2);
+  c.fillStyle = '#b9c3dd';
+  c.fillText(title, cv.width / 2, 126);
+
+  const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-  sprite.scale.set(2.05, 0.54, 1);
-  return sprite;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.26, 0.33),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 })
+  );
+  return m;
 }
 
-const heroes = [];      // { root, data, plate, baseY }
+// ------------------------------------------------------------------ junaci ---
+
+const heroes = [];
 const heroRoots = [];
 
-const RADIUS = 8;
-HERO_CREATORS.forEach((create, i) => {
-  const a = (i / HERO_CREATORS.length) * Math.PI * 2 - Math.PI / 2;
-  const x = Math.cos(a) * RADIUS;
-  const z = Math.sin(a) * RADIUS;
-  const facing = Math.atan2(-x, -z); // heroj gleda ka centru
+const plinthA = M(C.stoneLight, { roughness: 0.95 });
+const plinthB = M(C.stone, { roughness: 0.98 });
+const trimMat = Metal(C.gold, { emissive: C.gold, emissiveIntensity: 0 });
 
-  scene.add(makePedestal(x, z, facing));
+HEROES.forEach((create, i) => {
+  const side = i < 5 ? 1 : -1;                       // 0..4 desni red, 5..9 levi
+  const z = HERO_Z[i % 5];
+  const x = HERO_X * side;
+  const facing = side === 1 ? -Math.PI / 2 : Math.PI / 2;   // gleda ka osi lađe
 
   const data = create();
   const root = new THREE.Group();
-  root.add(data.group);
-  root.position.set(x, pedestalTopY, z);
+  root.position.set(x, PLINTH_H, z);
   root.rotation.y = facing;
-  root.userData.heroIndex = i;
+  root.add(data.group);
+  root.userData.hero = i;
   scene.add(root);
-
-  // visina heroja -> pozicija pločice sa imenom
-  const bbox = new THREE.Box3().setFromObject(data.group);
-  const plate = makeNameplate(data.name, data.title);
-  plate.position.y = bbox.max.y + 0.55;
-  root.add(plate);
-
-  heroes.push({ root, data, plate, baseScale: plate.scale.clone(), height: bbox.max.y });
   heroRoots.push(root);
+
+  // --- postament -----------------------------------------------------------
+  const plinth = group([], x, 0, z);
+  plinth.rotation.y = facing;
+  plinth.add(cyl(1.06, 1.16, 0.1, plinthB, 0, 0.05, 0, 14));
+  plinth.add(cyl(0.94, 1.02, 0.18, plinthA, 0, 0.19, 0, 14));
+  plinth.add(cyl(1.0, 0.94, 0.06, plinthB, 0, 0.31, 0, 14));
+  const ring = torus(0.97, 0.022, trimMat, 0, 0.335, 0, 6, 26);
+  ring.rotation.x = Math.PI / 2;
+  plinth.add(ring);
+
+  const plaque = makePlaque(data.name, data.title);
+  plaque.position.set(0, 0.2, 1.03);
+  plinth.add(plaque);
+  scene.add(plinth);
+
+  // --- barjak iza junaka ---------------------------------------------------
+  const her = data.heraldry ?? { color: C.slate, sigil: 'ring' };
+  const bannerGrp = group([], BANNER_X * side, 0, z);
+  bannerGrp.rotation.y = facing;
+
+  const poleMat = Metal(C.blackIron, { roughness: 0.6 });
+  bannerGrp.add(box(2.0, 0.075, 0.075, poleMat, 0, 5.25, 0));
+  for (const s of [-1, 1]) {
+    bannerGrp.add(sphere(0.08, Metal(C.brass), s * 1.02, 5.25, 0, 8, 7));
+    bannerGrp.add(box(0.05, 0.5, 0.05, poleMat, s * 0.86, 5.5, 0));
+  }
+
+  const clothMat = Cloth(her.color);
+  const clothDark = Cloth(new THREE.Color(her.color).multiplyScalar(0.62).getHex());
+  const strips = [];
+  const SW = 5;
+  for (let k = 0; k < SW; k++) {
+    const sx = (k - (SW - 1) / 2) * 0.35;
+    const st = group([], sx, 5.2, 0);
+    st.add(box(0.34, 2.5, 0.03, k % 2 ? clothDark : clothMat, 0, -1.25, 0));
+    st.add(cone(0.17, 0.3, k % 2 ? clothDark : clothMat, 0, -2.62, 0, 4));
+    st.children[st.children.length - 1].rotation.x = Math.PI;
+    bannerGrp.add(st);
+    strips.push(st);
+  }
+  // grb na sredini barjaka
+  const sigil = makeSigil(her.sigil, Metal(C.goldPale, { roughness: 0.4 }));
+  sigil.position.set(0, 3.9, 0.045);
+  sigil.scale.setScalar(0.92);
+  bannerGrp.add(sigil);
+  scene.add(bannerGrp);
+
+  const parts = countMeshes(data.group);
+  heroes.push({ root, data, strips, ring, sigil, parts, side, z, facing });
 });
 
-// ------------------------------------------------- interakcija (hover/klik) ---
-
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2(-10, -10);
-let hovered = -1;
-let selected = -1;
+// ------------------------------------------------------- korisnički sloj ---
 
 const panel = document.getElementById('panel');
-const panelIme = document.getElementById('panel-ime');
-const panelTitula = document.getElementById('panel-titula');
-const panelOpis = document.getElementById('panel-opis');
+const elIme = document.getElementById('p-ime');
+const elTitula = document.getElementById('p-titula');
+const elOpis = document.getElementById('p-opis');
+const elDelovi = document.getElementById('p-delovi');
+const rail = document.getElementById('rail');
 
-renderer.domElement.addEventListener('pointermove', (e) => {
-  pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-  pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+heroes.forEach((h, i) => {
+  const chip = document.createElement('button');
+  chip.className = 'chip';
+  chip.innerHTML = `<span class="chip-br">${String(i + 1).padStart(2, '0')}</span>${h.data.name}`;
+  chip.addEventListener('click', () => select(i));
+  rail.appendChild(chip);
+});
+const chips = Array.from(rail.children);
+
+// ------------------------------------------------------------- kretanje ---
+
+let selected = -1;
+let hovered = -1;
+let tween = null;
+
+function glide(camTo, tgtTo, dur = 1150) {
+  tween = {
+    t0: performance.now(), dur,
+    cf: camera.position.clone(), ct: camTo,
+    tf: controls.target.clone(), tt: tgtTo,
+  };
+}
+
+const _f = new THREE.Vector3();
+const _r = new THREE.Vector3();
+function select(i) {
+  selected = i;
+  const h = heroes[i];
+  const p = h.root.position;
+
+  // pravac u koji junak gleda i njegova desna strana — kamera staje u lađu,
+  // pomerena u stranu da kadar bude iz tri četvrtine
+  _f.set(Math.sin(h.facing), 0, Math.cos(h.facing));
+  _r.set(_f.z, 0, -_f.x);
+
+  const eye = h.data.eyeY ?? 1.5;
+  const camTo = new THREE.Vector3(
+    p.x + _f.x * 3.05 + _r.x * 1.35,
+    PLINTH_H + eye + 0.42,
+    p.z + _f.z * 3.05 + _r.z * 1.35
+  );
+  const tgtTo = new THREE.Vector3(p.x, PLINTH_H + eye * 0.92, p.z);
+  glide(camTo, tgtTo);
+
+  spot.position.set(p.x + _f.x * 2.3 + _r.x * 0.9, PLINTH_H + eye + 1.25, p.z + _f.z * 2.3 + _r.z * 0.9);
+  spot.intensity = 15;
+
+  elIme.textContent = h.data.name;
+  elTitula.textContent = h.data.title;
+  elOpis.textContent = h.data.blurb;
+  elDelovi.textContent = `${h.parts} delova`;
+  panel.classList.add('open');
+  chips.forEach((c, k) => c.classList.toggle('on', k === i));
+}
+
+function reset() {
+  selected = -1;
+  spot.intensity = 0;
+  panel.classList.remove('open');
+  chips.forEach((c) => c.classList.remove('on'));
+  glide(HOME_CAM.clone(), HOME_TGT.clone());
+}
+
+document.getElementById('zatvori').addEventListener('click', reset);
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') reset();
+  else if (e.key === 'ArrowRight') select((selected + 1 + heroes.length) % heroes.length);
+  else if (e.key === 'ArrowLeft') select((selected - 1 + heroes.length) % heroes.length);
 });
 
-function findHeroIndex(obj) {
-  while (obj) {
-    if (obj.userData.heroIndex !== undefined) return obj.userData.heroIndex;
-    obj = obj.parent;
-  }
+// ------------------------------------------------------------------ pogled ---
+
+const ray = new THREE.Raycaster();
+const ptr = new THREE.Vector2(-9, -9);
+renderer.domElement.addEventListener('pointermove', (e) => {
+  ptr.x = (e.clientX / window.innerWidth) * 2 - 1;
+  ptr.y = -(e.clientY / window.innerHeight) * 2 + 1;
+});
+
+let down = null;
+renderer.domElement.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (!down) return;
+  const moved = Math.hypot(e.clientX - down[0], e.clientY - down[1]);
+  down = null;
+  if (moved > 6) return;
+  if (hovered >= 0) select(hovered);
+  else if (selected >= 0) reset();
+});
+
+function heroOf(o) {
+  while (o) { if (o.userData.hero !== undefined) return o.userData.hero; o = o.parent; }
   return -1;
 }
-
-// blagi reflektor koji osvetli heroja dok ga razgledamo izbliza
-const portraitLight = new THREE.PointLight(0xffd9a8, 0, 9, 2);
-scene.add(portraitLight);
-
-// glatko fokusiranje kamere na izabranog heroja
-let tween = null; // { t0, dur, camFrom, camTo, tgtFrom, tgtTo }
-function focusHero(i) {
-  const { root, height } = heroes[i];
-  const p = root.position;
-  const dir = new THREE.Vector3(-p.x, 0, -p.z).normalize();
-  const eyeY = height * 0.62;                       // kadar prilagodjen visini heroja
-  const dist = 3.1 + height * 0.55;
-  const camTo = p.clone().addScaledVector(dir, dist).add(new THREE.Vector3(0, eyeY + 0.62, 0));
-  const tgtTo = p.clone().add(new THREE.Vector3(0, eyeY, 0));
-  tween = {
-    t0: performance.now(), dur: 1100,
-    camFrom: camera.position.clone(), camTo,
-    tgtFrom: controls.target.clone(), tgtTo,
-  };
-  controls.autoRotate = false;
-  portraitLight.position.copy(p).addScaledVector(dir, 3.0).add(new THREE.Vector3(0, eyeY + 0.9, 0));
-  portraitLight.intensity = 13;
-}
-
-function resetView() {
-  selected = -1;
-  panel.classList.remove('vidljiv');
-  tween = {
-    t0: performance.now(), dur: 1100,
-    camFrom: camera.position.clone(), camTo: DEFAULT_CAM.clone(),
-    tgtFrom: controls.target.clone(), tgtTo: DEFAULT_TARGET.clone(),
-  };
-  controls.autoRotate = true;
-  portraitLight.intensity = 0;
-}
-
-let downAt = null;
-renderer.domElement.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
-renderer.domElement.addEventListener('pointerup', (e) => {
-  if (!downAt) return;
-  const moved = Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]);
-  downAt = null;
-  if (moved > 6) return; // bilo je prevlačenje, ne klik
-
-  if (hovered >= 0) {
-    selected = hovered;
-    const d = heroes[selected].data;
-    panelIme.textContent = d.name;
-    panelTitula.textContent = d.title;
-    panelOpis.textContent = d.blurb;
-    panel.classList.add('vidljiv');
-    focusHero(selected);
-  } else if (selected >= 0) {
-    resetView();
-  }
-});
-
-document.getElementById('zatvori').addEventListener('click', resetView);
 
 // ---------------------------------------------------------------- animacija ---
 
@@ -559,56 +429,62 @@ function animate() {
   const t = clock.getElapsedTime();
   frame++;
 
-  // heroji
   for (const h of heroes) h.data.update(t);
 
-  // plamenovi
+  // barjaci se talasaju, svaki sa svojim ritmom
+  for (let i = 0; i < heroes.length; i++) {
+    const st = heroes[i].strips;
+    for (let k = 0; k < st.length; k++) {
+      st[k].rotation.x = Math.sin(t * (0.72 + i * 0.035) + k * 0.55 + i) * 0.055;
+      st[k].rotation.z = Math.sin(t * (0.51 + i * 0.028) + k * 0.4) * 0.03;
+    }
+  }
+
+  // plamenovi i njihova svetla
   for (const f of flames) {
-    const s = 1 + Math.sin(t * f.speed + f.phase) * 0.16 + Math.sin(t * f.speed * 2.7 + f.phase) * 0.07;
-    f.mesh.scale.set(s, 1 + (s - 1) * 1.6, s);
+    const s = 1 + Math.sin(t * f.speed + f.phase) * 0.17 + Math.sin(t * f.speed * 2.6 + f.phase) * 0.08;
+    f.mesh.scale.set(s, 1 + (s - 1) * 1.7, s);
   }
   for (const fl of flickerLights) {
-    fl.light.intensity = fl.base + Math.sin(t * fl.speed + fl.phase) * fl.amp * 0.6
-      + Math.sin(t * fl.speed * 2.3 + fl.phase * 1.7) * fl.amp * 0.4;
+    fl.light.intensity = fl.base
+      + Math.sin(t * fl.speed + fl.phase) * fl.amp * 0.6
+      + Math.sin(t * fl.speed * 2.4 + fl.phase * 1.6) * fl.amp * 0.4;
   }
 
-  // žar
+  // sneg pada i lelujavo se pomera u stranu
   {
-    const pos = embers.geometry.attributes.position;
-    for (let i = 0; i < emberData.length; i++) {
-      const d = emberData[i];
-      const life = ((t * d.speed + d.offset) % 3) / 3;      // 0..1
-      const y = 0.6 + life * 3.4;
-      const r = d.r + life * 0.55;
-      const a = d.a + life * d.swirl * 3;
-      pos.setXYZ(i, Math.cos(a) * r, y, Math.sin(a) * r);
+    const pos = snow.geometry.attributes.position;
+    for (let i = 0; i < snowData.length; i++) {
+      const d = snowData[i];
+      const k = ((t * d.speed * 0.09 + d.offset) % 1);
+      const y = 11.5 - k * 12.2;
+      pos.setXYZ(i, d.x + Math.sin(t * d.drift + d.phase) * 0.6, y, d.z + Math.cos(t * d.drift * 0.7 + d.phase) * 0.4);
     }
     pos.needsUpdate = true;
-    embers.material.opacity = 0.85;
   }
 
-  // hover (svaki drugi frejm, radi performansi)
+  // šta je pod pokazivačem
   if (frame % 2 === 0) {
-    raycaster.setFromCamera(pointer, camera);
-    const hits = raycaster.intersectObjects(heroRoots, true);
-    const idx = hits.length ? findHeroIndex(hits[0].object) : -1;
+    ray.setFromCamera(ptr, camera);
+    const hit = ray.intersectObjects(heroRoots, true);
+    const idx = hit.length ? heroOf(hit[0].object) : -1;
     if (idx !== hovered) {
       hovered = idx;
       renderer.domElement.style.cursor = idx >= 0 ? 'pointer' : 'default';
     }
   }
+  // obruč postamenta zasvetli pod pokazivačem ili kod izabranog junaka
   for (let i = 0; i < heroes.length; i++) {
-    const target = (i === hovered || i === selected) ? 1.18 : 1.0;
-    const pl = heroes[i].plate;
-    pl.scale.lerp(heroes[i].baseScale.clone().multiplyScalar(target), 0.15);
+    const want = (i === hovered || i === selected) ? 0.9 : 0;
+    const m = heroes[i].ring.material;
+    m.emissiveIntensity += (want - m.emissiveIntensity) * 0.12;
   }
 
-  // tvin kamere
   if (tween) {
     const k = Math.min(1, (performance.now() - tween.t0) / tween.dur);
-    const e = k * k * (3 - 2 * k); // smoothstep
-    camera.position.lerpVectors(tween.camFrom, tween.camTo, e);
-    controls.target.lerpVectors(tween.tgtFrom, tween.tgtTo, e);
+    const e = k * k * (3 - 2 * k);
+    camera.position.lerpVectors(tween.cf, tween.ct, e);
+    controls.target.lerpVectors(tween.tf, tween.tt, e);
     if (k >= 1) tween = null;
   }
 
@@ -621,18 +497,18 @@ function animate() {
   }
 }
 
-// mali javni hook — koristi se za automatske screenshot-ove i debug iz konzole
-window.__krug = {
-  focusHero,
-  resetView,
-  count: heroes.length,
-  names: heroes.map((h) => h.data.name),
-};
-
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+// hook za snimanje slika i za konzolu
+window.__dvorana = {
+  select, reset,
+  names: heroes.map((h) => h.data.name),
+  parts: heroes.map((h) => h.parts),
+  hideUI() { for (const id of ['zaglavlje', 'uputstvo', 'rail']) document.getElementById(id).style.display = 'none'; },
+};
 
 animate();
