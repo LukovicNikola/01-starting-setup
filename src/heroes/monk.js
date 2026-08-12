@@ -44,19 +44,21 @@ export function createMonk() {
   // ------------------------------------------------------------ materijali --
   const skin = Flesh(C.skinTan);
   const skinD = Flesh(C.skinDark);
-  const skinP = Flesh(C.skinPale);
-  const nailM = M(C.bone, { flat: false, roughness: 0.5 });
+  const skinP = Flesh(0xc78d5c);        // odsjaj kože — tek nijansu iznad tena, ne kost
+  const nailM = M(0xcdc2a9, { flat: false, roughness: 0.5 });
 
-  const robeM = Cloth(C.saffron, { side: THREE.DoubleSide });
-  const robeIn = Cloth(0x8a5a1a, { side: THREE.DoubleSide });
-  const robeTrim = Cloth(0xa9701f);
-  const dustM = Cloth(0x8b7a58);
+  // Dvorana je noćna i obasjana žeravnicima: odora je dublja od čiste šafranske
+  // žute, jer pod plamenom svaka svetla tkanina blješti.
+  const robeM = Cloth(0xc4831c, { side: THREE.DoubleSide });
+  const robeIn = Cloth(0x7d4c0c, { side: THREE.DoubleSide });
+  const robeTrim = Cloth(0x8f5a10);
+  const dustM = Cloth(0x7c6c4c);
 
-  const wrapM = Cloth(C.ivory);
-  const wrapSh = Cloth(0xc6bda6);
+  const wrapM = Cloth(0xc7bca1);        // pohabano platno, ne blistavo belo
+  const wrapSh = Cloth(0xa2967c);
   const ropeM = Hide(C.leatherPale);
   const ropeD = Hide(C.leather);
-  const thread = Cloth(C.bone);
+  const thread = Cloth(0xb5aa91);
 
   const woodM = M(C.woodPale, { roughness: 0.72 });
   const woodD = M(C.woodDark, { roughness: 0.8 });
@@ -173,48 +175,110 @@ export function createMonk() {
   head.position.set(0, 1.615, 0.012);
   torso.add(head);
 
+  // Površina lobanje za dato (x, y) — svaka crta lica koju sam dodajem legne
+  // UZ nju. Ista formula kao u alatnici, jer su i mere lobanje iste.
+  const HR = 0.115, HT = 1.06, HD = 0.96;
+  const skullZ = (x, y) => {
+    const k = 1 - (x / HR) ** 2 - (y / (HR * HT)) ** 2;
+    return k <= 0.02 ? 0 : HR * HD * Math.sqrt(k);
+  };
+
+  const EYE = 0.0185, EYE_Y = HR * 0.10;
   const face = makeFace({
     skin,
-    r: 0.115, tall: 1.06, deep: 0.96,
-    eye: 0x3b2b1d, eyeSize: 0.0185,
+    r: HR, tall: HT, deep: HD,
+    eye: 0x3b2b1d, eyeSize: EYE,
+    eyeZ: 0.083,                          // oko utonulo u duplju, ne ispupčeno
     brow: 0x241d18, browAngle: 0.04,
     mouth: 'smile',
     noseWide: 0.8, noseLen: 0.026,
   });
   head.add(face.group);
 
-  // Poluzatvoreni kapci: donja ivica kapka pada tačno na sredinu oka, pa
-  // treptaj (drop 0.019) zaklopi oko do kraja.
+  // Poluzatvorene oči: kapak je tanka spljoštena kapica koja pokriva gornjih
+  // ~40% oka, pa se ispod nje i dalje vide beonjača i zenica.
+  const LID_R = EYE * 1.16, LID_SY = 0.35;
+  // donja ivica kapka = gornjih 40% oka: (1 - 2·0.40) polovine oka iznad centra
+  const lidY = EYE_Y + EYE * 0.84 * 0.2 + LID_R * LID_SY;
   for (const lid of [face.lidL, face.lidR]) {
-    lid.position.y -= 0.011;
-    lid.position.z += 0.002;
-    lid.scale.set(1.08, 1.15, 1.05);
+    lid.scale.set(1.0, LID_SY, 0.9);
+    lid.position.y = lidY;
   }
-  // tanke obrve, blago spuštene ka spolja
-  for (const b of [face.browL, face.browR]) b.scale.set(1.0, 0.5, 0.75);
-  // usta tek nagoveste osmeh
-  if (face.mouth) { face.mouth.scale.set(1.15, 0.9, 1); face.mouth.rotation.x = -0.42; }
+  face.nose.scale.set(0.72, 1.05, 0.95);   // plići nos, da ne bude nalepljena grudva
+  // usta tek nagoveste osmeh — na površini vilice, ne utonula u nju
+  if (face.mouth) {
+    face.mouth.scale.set(1.15, 0.9, 1);
+    face.mouth.rotation.x = -0.42;
+    face.mouth.position.z = 0.088;
+  }
 
-  // izražene jagodice i borice osmeha
+  // Obrve: umesto dve daščice u vazduhu — po četiri tanka segmenta koja prate
+  // zakrivljenost čela. Segment iz alatnice je najbliži nosu, ostali su dodati.
+  const browMat = face.browL.material;
   for (const s of [-1, 1]) {
-    const cb = sphere(0.036, skin, s * 0.062, -0.014, 0.082, 8, 7);
-    cb.scale.set(1.15, 0.62, 0.9);
-    head.add(cb);
-    head.add(box(0.008, 0.028, 0.012, skinD, s * 0.05, -0.062, 0.094));   // borica uz usta
-    head.add(sphere(0.02, skin, s * 0.104, -0.052, -0.002, 6, 5));        // ušna resica
+    for (let i = 0; i < 4; i++) {
+      const bxp = s * (0.024 + i * 0.0155);
+      const byp = 0.047 - i * 0.0022;                  // rep obrve blago pada
+      const seg = i === 0 ? (s < 0 ? face.browL : face.browR)
+        : box(0.019, 0.0045, 0.007, browMat);
+      if (i === 0) seg.scale.set(0.37, 0.63, 1.1);
+      seg.position.set(bxp, byp, skullZ(bxp, byp) - 0.003);
+      seg.rotation.set(0, Math.asin(bxp / HR), -0.02 * s);
+      if (i > 0) head.add(seg);
+    }
   }
-  head.add(box(0.05, 0.02, 0.016, skinP, 0, -0.096, 0.09));               // brada
-  head.add(sphere(0.056, skin, 0, 0.036, -0.088, 9, 8));                 // potiljak
 
-  // tetovaža na temenu: tri koncentrična kruga, tanki torusi malo iznad kože
-  const tatY = [0.121, 0.112, 0.098];
-  const tatR = [0.03, 0.052, 0.075];
-  for (let i = 0; i < 3; i++) {
-    const t = torus(tatR[i], 0.0035, ink, 0, tatY[i], -0.004, 5, 22);
+  // izražene jagodice i borice osmeha — sve utonulo u kožu, ništa nalepljeno
+  for (const s of [-1, 1]) {
+    const cb = sphere(0.028, skin, s * 0.062, -0.014, skullZ(s * 0.062, -0.014) - 0.010, 8, 7);
+    cb.scale.set(1.3, 0.5, 0.42);
+    head.add(cb);
+    const wr = box(0.007, 0.026, 0.008, skinD, s * 0.05, -0.062, skullZ(s * 0.05, -0.062) - 0.003);
+    wr.rotation.y = Math.asin(s * 0.05 / HR);
+    head.add(wr);                                                       // borica uz usta
+    head.add(sphere(0.02, skin, s * 0.104, -0.052, -0.002, 6, 5));      // ušna resica
+  }
+  const chin = sphere(0.023, skin, 0, -0.094, 0.062, 9, 8);             // brada
+  chin.scale.set(1.3, 0.7, 0.8);
+  head.add(chin);
+  head.add(sphere(0.056, skin, 0, 0.036, -0.088, 9, 8));                // potiljak
+
+  // Tetovaža na temenu: TRI odvojena koncentrična kruga i tačka u središtu.
+  // Svaki prsten sedi na visini na kojoj mu poluprečnik pada tačno na kožu, i
+  // spljošten je po z jer je lobanja uža od okrugle — zato nigde ne odleće.
+  for (const rr of [0.026, 0.048, 0.070]) {
+    const ty = HR * HT * Math.sqrt(Math.max(0, 1 - (rr / HR) ** 2)) - 0.0018;
+    const t = torus(rr, 0.003, ink, 0, ty, 0, 5, 26);
     t.rotation.x = Math.PI / 2;
+    t.scale.set(1, HD, 1);
     head.add(t);
   }
-  head.add(sphere(0.008, ink, 0, 0.1225, -0.004, 6, 5));                 // tačka u središtu
+  head.add(cyl(0.0085, 0.0085, 0.004, ink, 0, HR * HT - 0.0018, 0, 12));  // tačka u središtu
+
+  // Prednja površina trupa po visini — elipsa (poluosa po x, po z, pomeraj z).
+  // Sve što leži po telu (traka odore, brojanica) postavlja se UZ nju, jer se
+  // ravna ploča razapeta pred oblim trupom vidi kao daska.
+  const GIRTH = [
+    [1.02, 0.152, 0.120, 0.012],
+    [1.10, 0.150, 0.126, 0.010],
+    [1.18, 0.158, 0.132, 0.006],
+    [1.30, 0.176, 0.128, 0.000],
+    [1.44, 0.166, 0.116, 0.000],
+  ];
+  /** Dubina prednje površine trupa u (x, y) i ugao njene normale oko y ose. */
+  function trunkFront(x, y) {
+    let i = 0;
+    while (i < GIRTH.length - 2 && y > GIRTH[i + 1][0]) i++;
+    const g0 = GIRTH[i], g1 = GIRTH[i + 1];
+    const t = Math.min(1, Math.max(0, (y - g0[0]) / (g1[0] - g0[0])));
+    const a = g0[1] + (g1[1] - g0[1]) * t;
+    const b = g0[2] + (g1[2] - g0[2]) * t;
+    const c = g0[3] + (g1[3] - g0[3]) * t;
+    const z = c + b * Math.sqrt(Math.max(0.05, 1 - (x / a) ** 2));
+    return { z, ang: Math.atan2(x / (a * a), (z - c) / (b * b)) };
+  }
+  /** Tačka tik iznad odenutog trupa — za niske koje leže po odori. */
+  const over = (x, y, lift) => [x, y, trunkFront(x, y).z + lift];
 
   // =========================================================== odora ======
   const robe = new THREE.Group();
@@ -262,25 +326,49 @@ export function createMonk() {
   sash.position.set(-0.015, 0.015, 0);
   ribs.add(sash);
 
-  // traka leži PREKO grudi (prednja strana na z ≈ 0.16), a zadnja joj je ivica
-  // utopljena u telo da se šav ne vidi
-  const band = new THREE.Group();
-  band.rotation.z = 0.6;
-  band.position.z = 0.134;
-  band.add(box(0.168, 0.66, 0.052, robeM));
-  band.add(box(0.019, 0.68, 0.06, robeTrim, 0.088, 0, 0.004));
-  band.add(box(0.019, 0.68, 0.06, robeTrim, -0.088, 0, 0.004));
-  for (let i = 0; i < 5; i++) {
-    band.add(box(0.011, 0.008, 0.018, thread, 0.088, -0.26 + i * 0.13, 0.034));
+  // Prednjica trake: šest kratkih polja koja LEŽE po grudima i struku. Jedna
+  // dugačka ravna kutija je pred oblim trupom štrčala kao daska i završavala se
+  // oštrim uglom u vazduhu pored kuka; ovako tkanina prati telo, ima šavove i
+  // uvire u odoru na struku.
+  const BAND_K = 0.684;                          // nagib trake (tan 0.6 rad)
+  for (let i = 0; i < 6; i++) {
+    const y = 1.42 - i * 0.056;
+    const x = -0.015 - BAND_K * (y - 1.235);
+    const f = trunkFront(x, y);
+    const p = group([], x + 0.015, y - 1.235, f.z + 0.018);
+    p.rotation.set(0, f.ang, 0.6);
+    p.add(box(0.168, 0.078, 0.036, robeM));
+    p.add(box(0.016, 0.08, 0.042, robeTrim, 0.083, 0, 0.001));         // opšiv uz ivicu
+    p.add(box(0.016, 0.08, 0.042, robeTrim, -0.083, 0, 0.001));
+    p.add(box(0.15, 0.008, 0.038, robeIn, 0, 0.039, 0));               // šav prema susednom polju
+    if (i > 0 && i < 5) {
+      p.add(box(0.009, 0.006, 0.012, thread, 0.083, 0.02, 0.024));     // šav utonuo u opšiv
+      p.add(box(0.026, 0.026, 0.016, woodD, 0.052, -0.01, 0.024));     // drveni gumb
+    }
+    sash.add(p);
   }
-  band.add(box(0.03, 0.03, 0.02, woodD, 0.06, -0.24, 0.04));            // drveni gumb
-  band.add(box(0.026, 0.026, 0.018, woodD, 0.04, 0.19, 0.04));
-  sash.add(band);
 
-  // zadnje polje odore i kapa preko levog ramena
-  sash.add(box(0.33, 0.6, 0.055, robeM, 0.015, -0.01, -0.115));
-  sash.add(box(0.35, 0.022, 0.062, robeTrim, 0.015, 0.28, -0.115));
-  sash.add(box(0.35, 0.022, 0.062, robeTrim, 0.015, -0.3, -0.115));
+  // Zadnje polje odore: pet uzanih pola savijenih po obimu leđa. Jedna ravna
+  // ploča se čitala kao daska koja viri pored tela — tkanina mora da prati telo.
+  const backPanels = [];
+  for (let i = 0; i < 5; i++) {
+    const a = (i - 2) * 0.40;
+    const d = Math.abs(i - 2);
+    const hh = 0.58 - d * 0.03;                                         // spoljna pola su kraća,
+    const cy = -0.02 - d * 0.012;                                       // da gornji rub prati ramena
+    const p = group([], Math.sin(a) * 0.178 + 0.012, cy, -Math.cos(a) * 0.168);
+    p.rotation.y = Math.PI - a;
+    p.add(box(0.084, hh, 0.028, robeM));
+    p.add(box(0.088, 0.02, 0.032, robeTrim, 0, hh / 2, 0.001));         // gornji opšiv
+    p.add(box(0.088, 0.018, 0.032, robeTrim, 0, -hh / 2, 0.001));       // donji opšiv
+    p.add(box(0.009, hh - 0.02, 0.032, robeIn, 0.042, 0, 0));           // šav prema susednom polu
+    backPanels.push(p);
+    sash.add(p);
+  }
+  // traka koja spaja prednjicu i zadnje polje ispod desne ruke
+  sash.add(bar([0.185, -0.185, 0.09], [0.175, -0.15, 0.0], 0.022, robeM, 6));
+  sash.add(bar([0.175, -0.15, 0.0], [0.15, -0.12, -0.09], 0.021, robeM, 6));
+  sash.add(bar([0.19, -0.21, 0.085], [0.178, -0.17, -0.005], 0.008, robeTrim, 5));
   const shoulderCap = sphere(0.098, robeM, -0.185, 0.222, 0.008, 11, 9);
   shoulderCap.scale.set(1.12, 0.8, 1.22);
   sash.add(shoulderCap);
@@ -334,18 +422,22 @@ export function createMonk() {
   // probrane da niz nigde ne uđe u vrat, u odoru ni u štap.
   const PV = [0, 1.5, -0.04];
   const L = (w) => [w[0] - PV[0], w[1] - PV[1], w[2] - PV[2]];
-  // desni niz prolazi IZA podlaktice koja se penje ka štapu, levi pada ispred
-  // dijagonalne trake; oba se sastaju u krupnoj perli iznad donje šake
-  const knotPt = [-0.075, 1.13, 0.262];
+  // Desni niz pada golim grudima, u praznini između kože i podlaktice koja se
+  // penje ka štapu; levi ide PREKO dijagonalne trake, jer brojanica leži na
+  // odori, a ne u njoj. Svaka tačka je birana tako da niz nigde ne uđe u vrat,
+  // u grudi, u traku ni u ruku.
+  const ON_ROBE = 0.042 + 0.017;                 // debljina trake + poluprečnik perle
+  const knotPt = over(-0.062, 1.142, 0.062);
   const malaR = [
-    [0.014, 1.502, -0.075], [0.062, 1.49, -0.05], [0.086, 1.452, 0.022],
-    [0.096, 1.4, 0.108], [0.078, 1.33, 0.142], [0.062, 1.27, 0.148],
-    [0.04, 1.2, 0.196], [-0.02, 1.155, 0.235], knotPt,
+    [0.014, 1.502, -0.078], [0.062, 1.492, -0.050], [0.090, 1.452, 0.032],
+    [0.098, 1.402, 0.112], [0.088, 1.344, 0.156], [0.068, 1.288, 0.172],
+    over(0.040, 1.232, ON_ROBE), over(0.005, 1.186, ON_ROBE), knotPt,
   ];
   const malaL = [
-    [-0.014, 1.502, -0.075], [-0.062, 1.49, -0.05], [-0.086, 1.452, 0.022],
-    [-0.096, 1.4, 0.108], [-0.102, 1.355, 0.185], [-0.105, 1.26, 0.208],
-    [-0.1, 1.19, 0.238], [-0.09, 1.16, 0.252], knotPt,
+    [-0.014, 1.502, -0.078], [-0.052, 1.494, -0.055], [-0.048, 1.483, 0.078],
+    [-0.055, 1.452, 0.100], over(-0.070, 1.400, ON_ROBE),
+    over(-0.086, 1.336, ON_ROBE), over(-0.096, 1.272, ON_ROBE),
+    over(-0.092, 1.208, ON_ROBE), knotPt,
   ];
   const mala = new THREE.Group();
   mala.position.set(PV[0], PV[1], PV[2]);
@@ -377,8 +469,8 @@ export function createMonk() {
   const guru = L(knotPt);
   mala.add(sphere(0.025, woodD, guru[0], guru[1], guru[2], 8, 7));      // krupna perla
   for (let i = 0; i < 2; i++) {
-    mala.add(bar([guru[0], guru[1] - 0.022, guru[2]],
-      [guru[0] + (i * 2 - 1) * 0.011, guru[1] - 0.058, guru[2] - 0.006], 0.005, thread, 5));
+    mala.add(bar([guru[0], guru[1] - 0.022, guru[2] + 0.006],
+      [guru[0] + (i * 2 - 1) * 0.011, guru[1] - 0.058, guru[2] + 0.04], 0.005, thread, 5));
   }
 
   // ============================================================ štap i šake
@@ -400,8 +492,9 @@ export function createMonk() {
   staff.add(rivetRing(0.027, 3, 0.005, iron, 1.774, 1, 0.4));
   // kožni omot u sredini
   staff.add(cyl(0.0272, 0.0278, 0.30, Hide(C.leatherDark), 0, 1.115, 0, 12));
+  // karike omota staju IZMEĐU šaka, da ne prolaze kroz dlanove
   for (let i = 0; i < 4; i++) {
-    const t = torus(0.0288, 0.0055, Hide(C.leather), 0, 0.99 + i * 0.082, 0, 6, 14);
+    const t = torus(0.0288, 0.0055, Hide(C.leather), 0, 1.06 + i * 0.042, 0, 6, 14);
     t.rotation.x = Math.PI / 2;
     staff.add(t);
   }
@@ -413,19 +506,39 @@ export function createMonk() {
   }
   staff.add(box(0.005, 0.05, 0.005, woodD, -0.022, 1.5, 0.006));        // duža ogrebotina
 
-  const handTop = makeHand({ skin, pose: 'grip', side: 1 });
-  handTop.position.set(0, 1.26, 0);
-  handTop.rotation.y = -0.34;
+  /**
+   * Šaka na štapu. Osa drške je Y osa šake, kako alatnica i predviđa, a grupa
+   * je stisnuta po x da prsti obuhvate tanku motku umesto da vire pored nje.
+   * Dodati su članci i kvrge: bez njih se šaka čita kao naslagane kocke.
+   */
+  function staffHand(y, side, rotY) {
+    const h = makeHand({ skin, pose: 'grip', side });
+    h.position.set(0, y, 0);
+    h.rotation.y = rotY;
+    h.scale.set(0.66, 1, 1);
+    const P = 0.052;                       // pola širine dlana u alatnici
+    for (let i = 0; i < 4; i++) {
+      const fy = P * (0.78 - i * 0.52);
+      const sh = 1 - Math.abs(i - 1.2) * 0.09;
+      // obli prst preko drške: pokriva ravnu prednjicu članka iz alatnice, pa
+      // se šaka vidi kao četiri prsta koja obuhvataju motku, a ne kao kocke
+      const f = cyl(P * 0.24 * sh, P * 0.24 * sh, P * 1.75, skin, 0, fy, P * 0.5, 8);
+      f.rotation.z = Math.PI / 2;
+      h.add(f);
+      h.add(sphere(P * 0.28 * sh, skin, -P * 0.88 * side, fy, P * 0.34, 7, 6));  // kvrga uz dlan
+      h.add(sphere(P * 0.25 * sh, skin, P * 0.86 * side, fy, P * 0.46, 7, 6));   // vrh prsta
+      if (i < 3) h.add(box(P * 1.5, P * 0.07, P * 0.3, skinD, 0, fy - P * 0.26, P * 0.44));
+    }
+    // povoj: dve tanke trake preko nadlanice i jedna preko ivice dlana
+    h.add(box(P * 2.06, P * 0.3, P * 1.15, wrapM, 0, P * 0.62, -P * 0.95));
+    h.add(box(P * 2.0, P * 0.26, P * 1.1, wrapSh, 0, -P * 0.66, -P * 1.0));
+    h.add(box(P * 0.42, P * 1.9, P * 0.8, wrapM, -P * 0.98 * side, 0, -P * 0.62));
+    return h;
+  }
+  const handTop = staffHand(1.26, 1, -0.34);
   staff.add(handTop);
-  handTop.add(box(0.115, 0.024, 0.072, wrapM, 0, 0.03, -0.05));         // povoj preko šake
-  handTop.add(box(0.106, 0.02, 0.068, wrapSh, -0.004, -0.032, -0.052));
-
-  const handBot = makeHand({ skin, pose: 'grip', side: -1 });
-  handBot.position.set(0, 0.99, 0);
-  handBot.rotation.y = 0.34;
+  const handBot = staffHand(0.99, -1, 0.34);
   staff.add(handBot);
-  handBot.add(box(0.115, 0.024, 0.072, wrapM, 0, 0.03, -0.05));
-  handBot.add(box(0.106, 0.02, 0.068, wrapSh, 0.004, -0.032, -0.052));
 
   // =================================================================== ruke
   // Laktovi su na istoj visini — poza je simetrična; zglobovi ulaze u dlanove
@@ -472,7 +585,12 @@ export function createMonk() {
   const triR = sphere(0.046, skin, 0, uR.len * 0.5, -0.03, 9, 8);
   triR.scale.set(0.9, 1.4, 0.8);
   uR.g.add(triR);
-  for (let i = 0; i < 3; i++) ring(uR.g, 0.0555 - i * 0.0026, 0.0075, ink, uR.len * (0.28 + i * 0.115), 6, 16);
+  // tri crne tetovažne trake: spljoštene po stvarnom preseku ruke (biceps
+  // ispred, triceps iza), pa nigde ne odlepe od kože
+  for (let i = 0; i < 3; i++) {
+    const t = ring(uR.g, 0.0555 - i * 0.0016, 0.0055, ink, uR.len * (0.28 + i * 0.115), 6, 18);
+    t.scale.set(1, 1.18, 1);
+  }
   armR.add(uR.g);
   armR.add(sphere(0.044, skin, elR[0], elR[1], elR[2], 9, 8));          // lakat
   armR.add(sphere(0.02, skinP, elR[0] + 0.03, elR[1] - 0.012, elR[2] - 0.02, 6, 5));
@@ -490,8 +608,8 @@ export function createMonk() {
   bicL.scale.set(0.95, 1.4, 0.85);
   uL.g.add(bicL);
   uL.g.add(cyl(0.058, 0.075, uL.len * 0.62, robeM, 0, uL.len * 0.3, 0, 12));   // rukav
-  ring(uL.g, 0.06, 0.011, robeTrim, uL.len * 0.6, 6, 16);
-  ring(uL.g, 0.072, 0.009, robeTrim, uL.len * 0.05, 6, 16);
+  ring(uL.g, 0.0595, 0.008, robeTrim, uL.len * 0.6, 6, 18);       // rub rukava
+  ring(uL.g, 0.0735, 0.008, robeTrim, uL.len * 0.05, 6, 18);
   armL.add(uL.g);
   armL.add(sphere(0.043, skin, elL[0], elL[1], elL[2], 9, 8));
   armL.add(sphere(0.019, skinP, elL[0] - 0.028, elL[1] - 0.012, elL[2] - 0.02, 6, 5));
@@ -507,7 +625,7 @@ export function createMonk() {
   armL.add(wristF.g);
 
   // ============================================================= animacija ==
-  // Šest nezavisnih pokreta, svaki svoje brzine i faze. Disanje je glavno i
+  // Nekoliko nezavisnih pokreta, svaki svoje brzine i faze. Disanje je glavno i
   // sporije je nego kod ostalih junaka; ruke ga tek nagoveste, jer su šake
   // vezane za štap i ne smeju da se odvoje od zglobova.
   anim.breathe(ribs, 0.015, 0.55);                       // vrlo sporo duboko disanje
@@ -522,15 +640,26 @@ export function createMonk() {
   anim.wave(ropeEnds, 'x', 0.05, 0.37, 1.1);             // krajevi konopca
   anim.rot(bowl, 'z', 0.03, 0.33, 0.8);
 
-  anim.rot(mala, 'z', 0.028, 0.62, 0.4);                 // njihanje brojanice
-  anim.rot(mala, 'x', 0.02, 0.47, 2.1);
+  anim.wave(backPanels, 'x', 0.012, 0.39, 0.5);          // zadnja pola odore
+  anim.rot(mala, 'z', 0.018, 0.62, 0.4);                 // njihanje brojanice
+  anim.rot(mala, 'x', 0.014, 0.47, 2.1);                 // (malo, da niz ostane preko odore)
 
   anim.rot(staff, 'x', 0.0055, 0.31, 0.6);               // sitno pomeranje štapa
   anim.rot(staff, 'z', 0.0045, 0.19, 2.2);
 
   anim.rot(head, 'x', 0.009, 0.17, 0.9);                 // spušten pogled se tek pomeri
-  anim.blink(face.lidL, 6.4, 0.0, 0.019);                // kapci povremeno padnu do kraja
-  anim.blink(face.lidR, 6.4, 0.06, 0.019);
+
+  // Treptaj: poluzatvoren kapak se na trenutak IZDUŽI nadole i zaklopi oko, a
+  // gornja ivica mu ostaje u duplji. Sve se računa iz t, ništa se ne pamti.
+  for (const [lid, phase] of [[face.lidL, 0.0], [face.lidR, 0.06]]) {
+    anim.custom((t) => {
+      const k = ((((t + phase) / 6.4) % 1) + 1) % 1;
+      const c = k < 0.055 ? Math.sin((k / 0.055) * Math.PI) : 0;
+      const sy = LID_SY + c * 0.95;
+      lid.scale.y = sy;
+      lid.position.y = lidY - (sy - LID_SY) * LID_R;
+    });
+  }
 
   return {
     name: 'Brat Tihomir',
